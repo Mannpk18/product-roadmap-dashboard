@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Feature Prioritization & Roadmap Dashboard</title>
+  <meta name="description" content="Interactive product roadmap dashboard with RICE/WSJF-inspired scoring, backlog management, sprint board, and stakeholder release views." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Design tokens (standalone fallbacks) ── */
+    :root {
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      --color-text-primary: #1a1a1a;
+      --color-text-secondary: #6b6b6b;
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f5f5f5;
+      --color-border-tertiary: #e0e0e0;
+      --border-radius-md: 8px;
+      --border-radius-lg: 12px;
+      --accent: #185FA5;
+      --accent-bg: #E6F1FB;
+      --success: #3B6D11;
+      --success-bg: #EAF3DE;
+      --warn: #854F0B;
+      --warn-bg: #FAEEDA;
+      --danger: #A32D2D;
+      --danger-bg: #FCEBEB;
+      --purple: #534AB7;
+      --purple-bg: #EEEDFE;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-background-primary);
+      color: var(--color-text-primary);
+      padding: 32px 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .dashboard-header {
+      margin-bottom: 28px;
+    }
+    .dashboard-header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .dashboard-header p {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── Navigation ── */
+    .app { width: 100%; }
+    .nav { display: flex; gap: 4px; padding: 0 0 16px; border-bottom: 0.5px solid var(--color-border-tertiary); margin-bottom: 20px; flex-wrap: wrap; }
+    .nav-btn { padding: 7px 14px; font-size: 13px; font-weight: 500; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: transparent; cursor: pointer; color: var(--color-text-secondary); transition: all .15s; font-family: var(--font-sans); }
+    .nav-btn.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+    .nav-btn:hover:not(.active) { background: var(--color-background-secondary); color: var(--color-text-primary); }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Scoring Page ── */
+    .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; }
+    .metric-card .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .metric-card .val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+    .score-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .score-table th { text-align: left; padding: 8px 10px; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); border-bottom: 0.5px solid var(--color-border-tertiary); background: var(--color-background-secondary); }
+    .score-table td { padding: 9px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); vertical-align: middle; }
+    .score-table tr:hover td { background: var(--color-background-secondary); }
+    .score-bar { width: 100%; height: 5px; background: var(--color-border-tertiary); border-radius: 3px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 3px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
+    .badge-must { background: #FCEBEB; color: #A32D2D; }
+    .badge-high { background: #FAEEDA; color: #854F0B; }
+    .badge-med { background: #E6F1FB; color: #185FA5; }
+    .badge-low { background: #F1EFE8; color: #5F5E5A; }
+    .badge-blocked { background: #FDF3D0; color: #7A5C00; }
+    .badge-review { background: #EDF0FB; color: #3D4DA8; }
+    .flag-note { font-size: 11px; color: var(--color-text-secondary); margin-top: 6px; padding: 5px 8px; background: var(--color-background-secondary); border-radius: 4px; border-left: 2px solid var(--color-border-tertiary); }
+    .tier-col { font-weight: 500; font-size: 12px; }
+
+    /* ── Backlog Page ── */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-chip { padding: 5px 12px; border: 0.5px solid var(--color-border-tertiary); border-radius: 20px; font-size: 12px; cursor: pointer; background: transparent; color: var(--color-text-secondary); transition: all .15s; font-family: var(--font-sans); }
+    .filter-chip.on { background: var(--color-text-primary); color: var(--color-background-primary); border-color: var(--color-text-primary); }
+    .story-card { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 10px; background: var(--color-background-primary); }
+    .story-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .story-id { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); font-family: var(--font-mono); }
+    .story-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); flex: 1; }
+    .story-body { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 10px; }
+    .story-footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .sp-pill { font-size: 11px; font-weight: 500; padding: 2px 8px; background: var(--color-background-secondary); color: var(--color-text-secondary); border-radius: 20px; border: 0.5px solid var(--color-border-tertiary); }
+    .theme-tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+    .theme-onboarding { background: #EEEDFE; color: #534AB7; }
+    .theme-analytics { background: #EAF3DE; color: #3B6D11; }
+    .theme-integration { background: #FAEEDA; color: #854F0B; }
+    .theme-collaboration { background: #E6F1FB; color: #185FA5; }
+    .theme-security { background: #FCEBEB; color: #A32D2D; }
+    .theme-perf { background: #E1F5EE; color: #0F6E56; }
+    .rank-num { width: 24px; height: 24px; border-radius: 50%; background: var(--color-background-secondary); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: var(--color-text-secondary); flex-shrink: 0; }
+
+    /* ── Roadmap Page ── */
+    .roadmap-wrap { overflow-x: auto; }
+    .roadmap-grid { min-width: 620px; }
+    .roadmap-header { display: grid; grid-template-columns: 120px repeat(4, 1fr); gap: 0; margin-bottom: 8px; }
+    .rh-label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); }
+    .rh-q { font-size: 13px; font-weight: 500; color: var(--color-text-primary); text-align: center; padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+    .roadmap-row { display: grid; grid-template-columns: 120px repeat(4, 1fr); gap: 0; margin-bottom: 4px; align-items: start; }
+    .rr-theme { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); padding: 8px 0; display: flex; align-items: center; gap: 6px; }
+    .rr-cell { padding: 4px; }
+    .rm-chip { border-radius: 6px; padding: 7px 10px; font-size: 12px; font-weight: 500; margin-bottom: 4px; cursor: default; transition: all .15s; position: relative; }
+    .rm-chip:hover { filter: brightness(0.95); }
+    .rm-chip .rc-title { display: block; font-size: 12px; font-weight: 500; }
+    .rm-chip .rc-pts { font-size: 10px; font-weight: 400; opacity: .8; }
+    .rm-onboarding { background: #EEEDFE; color: #3C3489; }
+    .rm-analytics { background: #EAF3DE; color: #27500A; }
+    .rm-integration { background: #FAEEDA; color: #633806; }
+    .rm-collaboration { background: #E6F1FB; color: #0C447C; }
+    .rm-security { background: #FCEBEB; color: #791F1F; }
+    .rm-perf { background: #E1F5EE; color: #085041; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+    /* ── Sprint Page ── */
+    .sprint-header-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+    .sprint-title { font-size: 16px; font-weight: 500; color: var(--color-text-primary); }
+    .sprint-meta { font-size: 13px; color: var(--color-text-secondary); }
+    .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .kanban-col { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; }
+    .kanban-col-title { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .kanban-count { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: 20px; font-size: 11px; padding: 1px 8px; color: var(--color-text-secondary); }
+    .ticket { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; margin-bottom: 8px; }
+    .ticket-id { font-size: 10px; color: var(--color-text-secondary); font-family: var(--font-mono); margin-bottom: 4px; }
+    .ticket-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 8px; line-height: 1.4; }
+    .ticket-footer { display: flex; align-items: center; justify-content: space-between; }
+    .ticket-sp { font-size: 11px; font-weight: 500; width: 20px; height: 20px; background: var(--color-background-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); }
+    .assignee { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; }
+    .progress-bar { height: 6px; background: var(--color-background-secondary); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+    .progress-fill { height: 100%; border-radius: 3px; background: #3B6D11; }
+    .velocity-row { display: flex; gap: 10px; margin-top: 16px; }
+    .vel-card { flex: 1; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; }
+    .vel-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .vel-val { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+
+    /* ── Stakeholder Page ── */
+    .release-card { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; margin-bottom: 16px; }
+    .release-head { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .release-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+    .release-date { font-size: 12px; color: var(--color-text-secondary); }
+    .release-body { padding: 14px 16px; border-top: 0.5px solid var(--color-border-tertiary); }
+    .rationale-block { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 12px; }
+    .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .feature-pill { font-size: 12px; padding: 6px 10px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); color: var(--color-text-primary); display: flex; align-items: center; gap: 6px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Footer ── */
+    .dashboard-footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 0.5px solid var(--color-border-tertiary);
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      text-align: center;
+    }
+
+    @media (max-width: 500px) {
+      body { padding: 16px; }
+      .metric-row { grid-template-columns: 1fr 1fr; }
+      .kanban { grid-template-columns: 1fr; }
+      .roadmap-header, .roadmap-row { grid-template-columns: 90px repeat(4, 1fr); }
+      .velocity-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <h1>📊 Product Feature Prioritization & Roadmap Dashboard</h1>
+    <p>A SaaS B2B analytics platform's 2025 roadmap — 17 features scored with a weighted framework (User Impact 40%, Business Value 35%, Technical Feasibility 25%), organized into quarterly releases with sprint-level execution tracking.</p>
+  </div>
+
+  <div class="app">
+    <div class="nav">
+      <button class="nav-btn active" onclick="showPage('scoring',this)">Feature Scoring</button>
+      <button class="nav-btn" onclick="showPage('backlog',this)">Backlog</button>
+      <button class="nav-btn" onclick="showPage('roadmap',this)">Roadmap</button>
+      <button class="nav-btn" onclick="showPage('sprint',this)">Sprint Board</button>
+      <button class="nav-btn" onclick="showPage('stakeholder',this)">Stakeholder View</button>
+    </div>
+
+    <!-- SCORING PAGE -->
+    <div class="page active" id="page-scoring">
+      <div class="metric-row">
+        <div class="metric-card"><div class="label">Total features</div><div class="val">17</div></div>
+        <div class="metric-card"><div class="label">Must-have</div><div class="val" style="color:#A32D2D">5</div></div>
+        <div class="metric-card"><div class="label">Avg score</div><div class="val">71.4</div></div>
+        <div class="metric-card"><div class="label">Roadmapped</div><div class="val" style="color:#3B6D11">13</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;">Weighted score = User Impact (40%) + Business Value (35%) + Technical Feasibility (25%)</div>
+      <table class="score-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Feature</th>
+            <th>Theme</th>
+            <th>User Impact</th>
+            <th>Biz Value</th>
+            <th>Tech Feasibility</th>
+            <th>Score</th>
+            <th>Priority</th>
+          </tr>
+        </thead>
+        <tbody id="score-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- BACKLOG PAGE -->
+    <div class="page" id="page-backlog">
+      <div class="filter-bar">
+        <span style="font-size:12px;color:var(--color-text-secondary);font-weight:500;">Filter:</span>
+        <button class="filter-chip on" onclick="filterBacklog('all',this)">All</button>
+        <button class="filter-chip" onclick="filterBacklog('onboarding',this)">Onboarding</button>
+        <button class="filter-chip" onclick="filterBacklog('analytics',this)">Analytics</button>
+        <button class="filter-chip" onclick="filterBacklog('integration',this)">Integration</button>
+        <button class="filter-chip" onclick="filterBacklog('collaboration',this)">Collaboration</button>
+        <button class="filter-chip" onclick="filterBacklog('security',this)">Security</button>
+        <button class="filter-chip" onclick="filterBacklog('perf',this)">Performance</button>
+      </div>
+      <div id="backlog-list"></div>
+    </div>
+
+    <!-- ROADMAP PAGE -->
+    <div class="page" id="page-roadmap">
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#AFA9EC"></span>Onboarding</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#97C459"></span>Analytics</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#EF9F27"></span>Integration</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#85B7EB"></span>Collaboration</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#F09595"></span>Security</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#5DCAA5"></span>Performance</span>
+      </div>
+      <div class="roadmap-wrap">
+        <div class="roadmap-grid">
+          <div class="roadmap-header">
+            <div class="rh-label"></div>
+            <div class="rh-q">Q1 2025<br><span style="font-size:11px;font-weight:400;color:var(--color-text-secondary)">Foundation</span></div>
+            <div class="rh-q">Q2 2025<br><span style="font-size:11px;font-weight:400;color:var(--color-text-secondary)">Growth</span></div>
+            <div class="rh-q">Q3 2025<br><span style="font-size:11px;font-weight:400;color:var(--color-text-secondary)">Scale</span></div>
+            <div class="rh-q">Q4 2025<br><span style="font-size:11px;font-weight:400;color:var(--color-text-secondary)">Optimize</span></div>
+          </div>
+          <div id="roadmap-grid-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPRINT PAGE -->
+    <div class="page" id="page-sprint">
+      <div class="sprint-header-bar">
+        <div>
+          <div class="sprint-title">Sprint 4 — Onboarding & Compliance</div>
+          <div class="sprint-meta">May 12 – May 23, 2025 · 19 / 35 pts · 1 blocker</div>
+        </div>
+        <div>
+          <div class="progress-bar" style="width:200px">
+            <div class="progress-fill" style="width:54%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px;text-align:right">54% complete</div>
+        </div>
+      </div>
+      <div class="kanban" id="kanban-board"></div>
+      <div class="velocity-row">
+        <div class="vel-card"><div class="vel-label">Avg velocity (last 3)</div><div class="vel-val">41 pts</div></div>
+        <div class="vel-card"><div class="vel-label">Remaining</div><div class="vel-val">16 pts</div></div>
+        <div class="vel-card"><div class="vel-label">Team size</div><div class="vel-val">4 devs</div></div>
+        <div class="vel-card"><div class="vel-label">Days left</div><div class="vel-val">3</div></div>
+      </div>
+    </div>
+
+    <!-- STAKEHOLDER PAGE -->
+    <div class="page" id="page-stakeholder">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:6px;">2025 Release Strategy</div>
+        <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;">Each release is sequenced to deliver compounding value — foundation first, monetizable features second, enterprise-readiness last. Features are ordered by RICE score; dependencies resolved before dependents.</div>
+      </div>
+      <div id="stakeholder-releases"></div>
+    </div>
+  </div>
+
+  <div class="dashboard-footer">
+    Built by <a href="https://github.com/Mannpk18" style="color:var(--accent);text-decoration:none;font-weight:500;">Mann Kaniyawala</a> · Product Roadmap Dashboard
+  </div>
+
+  <script>
+    const FEATURES = [
+      { id:'F-01', title:'User onboarding wizard', theme:'onboarding', impact:9, biz:8.5, feasibility:7, quarter:'Q1', story:'New users are dropping off before they reach the first "aha" moment — activation rate is sitting at 34%. A step-by-step setup flow (connect data source → invite teammates → run first report) should get them to value in one session.', sp:8, status:'in-progress', assignee:'AK', note:'Scope creep risk — keep to 3 steps max, fancy animations are Q2 problem' },
+      { id:'F-02', title:'SSO / SAML integration', theme:'security', impact:8, biz:9, feasibility:6, quarter:'Q1', story:'Three enterprise prospects have stalled on this. IT admins won\'t approve tools that can\'t authenticate via their IdP. Needs Okta + Azure AD at minimum; Google Workspace would be nice but can follow.', sp:13, status:'done', assignee:'MR' },
+      { id:'F-03', title:'Dashboard analytics v1', theme:'analytics', impact:7.5, biz:8, feasibility:7, quarter:'Q1', story:'PMs are exporting CSVs and building charts in Sheets — we should own this. Start with DAU/WAU, feature adoption funnels, and a retention cohort. Deliberately narrow; we can add segments in v2.', sp:11, status:'done', assignee:'JS' },
+      { id:'F-04', title:'Slack notifications', theme:'integration', impact:7, biz:7.5, feasibility:8, quarter:'Q2', story:'As a power user, I want to receive Slack alerts for threshold breaches and mentions so I can respond without living in another tab.', sp:5, status:'blocked', assignee:'AK', note:'Blocked on Slack app review — submitted 2025-04-18, avg turnaround is 2–3 weeks' },
+      { id:'F-05', title:'Role-based access control', theme:'security', impact:8, biz:8, feasibility:5.5, quarter:'Q1', story:'Admins need viewer / editor / admin tiers at minimum. Several teams are sharing single logins as a workaround, which breaks the audit trail entirely.', sp:8, status:'done', assignee:'MR' },
+      { id:'F-06', title:'Custom report builder', theme:'analytics', impact:6.5, biz:8, feasibility:6, quarter:'Q2', story:'Power users are hitting the ceiling on pre-built dashboards fast. Let them pick metrics, apply filters, and group by any dimension. Export to PDF is the one non-negotiable from sales calls.', sp:13, status:'todo', assignee:'JS' },
+      { id:'F-07', title:'Real-time co-editing', theme:'collaboration', impact:9, biz:7, feasibility:4.5, quarter:'Q3', story:'Teams are emailing report snapshots back and forth to avoid overwriting each other. Live cursors + conflict-free edits would eliminate this entirely — but the CRDTs work is genuinely hard.', sp:34, status:'todo', assignee:'RB', note:'Feasibility score is generous; budget 2 spikes before committing to Q3' },
+      { id:'F-08', title:'API rate limiting', theme:'perf', impact:5.5, biz:6.5, feasibility:9, quarter:'Q2', story:'One customer\'s nightly ETL job hit us with 40k req/min last Tuesday and took the API down for everyone else. Per-key throttling with configurable limits is the fix.', sp:5, status:'todo', assignee:'MR' },
+      { id:'F-09', title:'Mobile app (iOS & Android)', theme:'onboarding', impact:8, biz:9, feasibility:4.5, quarter:'Q3', story:'Field reps and ops managers keep asking. The use case is read-only dashboards + push alerts on anomalies — not full editing. React Native probably makes sense; avoids two codebases.', sp:34, status:'todo', assignee:'AK' },
+      { id:'F-10', title:'Audit log & compliance export', theme:'security', impact:6, biz:8.5, feasibility:8, quarter:'Q2', story:'We have three contracts gated on SOC 2 Type II. Auditors need tamper-evident logs of every read/write with user, timestamp, and resource. CSV + JSON export, 90-day retention minimum.', sp:6, status:'review', assignee:'MR' },
+      { id:'F-11', title:'Webhook event subscriptions', theme:'integration', impact:7, biz:7, feasibility:7, quarter:'Q2', story:'Developers want to push our events into their own pipelines without polling the API. Standard payload envelope (event type, resource ID, timestamp, payload) with retry + delivery receipts.', sp:8, status:'todo', assignee:'JS' },
+      { id:'F-12', title:'Anomaly detection & alerts', theme:'analytics', impact:9, biz:9, feasibility:4.5, quarter:'Q3', story:'The insight users actually want: tell me when something looks wrong before I go looking for it. Statistical baseline + configurable sensitivity per metric. ML model TBD — rule-based v1 is fine.', sp:21, status:'todo', assignee:'RB', note:'Needs data science input before sprint planning — loop in Priya' },
+      { id:'F-13', title:'Multi-tenant workspaces', theme:'collaboration', impact:7, biz:9, feasibility:5, quarter:'Q3', story:'Agencies managing multiple clients want hard data isolation and per-workspace branding. This is the unlock for a reseller channel. Data model changes are significant — needs schema migration plan.', sp:21, status:'todo', assignee:'AK' },
+      { id:'F-14', title:'Dark mode', theme:'onboarding', impact:5.5, biz:4.5, feasibility:9, quarter:'Q1', story:'Low effort, high goodwill. CSS custom properties make this straightforward. Ship it and move on.', sp:3, status:'done', assignee:'JS' },
+      { id:'F-15', title:'Slow query detection', theme:'perf', impact:6.5, biz:5.5, feasibility:7, quarter:'Q4', story:'p99 latency for data-heavy accounts is creeping up. Want automatic flagging of queries over 2s with an explain plan attached. Engineers can triage from a dashboard rather than digging through logs.', sp:8, status:'todo', assignee:'MR' },
+      { id:'F-16', title:'Integrations marketplace', theme:'integration', impact:7.5, biz:8, feasibility:5.5, quarter:'Q4', story:'Long tail of integration requests we can\'t build ourselves. A partner-contributed marketplace with a submission review process lets us grow the ecosystem without owning the roadmap.', sp:21, status:'todo', assignee:'AK' },
+      { id:'F-17', title:'Scheduled report delivery', theme:'analytics', impact:5.5, biz:6.5, feasibility:8, quarter:'Q4', story:'Managers want a Monday morning email with the weekly summary without having to remember to log in. Cron-style schedule, PDF attachment, configurable recipients. Simple but keeps churned users engaged.', sp:5, status:'todo', assignee:'JS' },
+    ];
+
+    function score(f) { return Math.round((f.impact*0.4 + f.biz*0.35 + f.feasibility*0.25)*10)/1; }
+    function priority(s) { if(s>=85) return {label:'Must-have',cls:'badge-must'}; if(s>=75) return {label:'High',cls:'badge-high'}; if(s>=65) return {label:'Medium',cls:'badge-med'}; return {label:'Low',cls:'badge-low'}; }
+    function statusLabel(s) { if(s==='blocked') return {label:'Blocked',cls:'badge-blocked'}; if(s==='review') return {label:'In review',cls:'badge-review'}; return null; }
+    function themeClass(t) { return 'theme-'+t; }
+    function rmClass(t) { return 'rm-'+t; }
+    const themeLabel = { onboarding:'Onboarding', analytics:'Analytics', integration:'Integration', collaboration:'Collaboration', security:'Security', perf:'Performance' };
+    const assigneeColor = { AK:'#EEEDFE', MR:'#E1F5EE', JS:'#FAEEDA', RB:'#E6F1FB' };
+    const assigneeTextColor = { AK:'#534AB7', MR:'#0F6E56', JS:'#854F0B', RB:'#185FA5' };
+
+    // SCORING TABLE
+    const sorted = [...FEATURES].sort((a,b)=>score(b)-score(a));
+    const tbody = document.getElementById('score-tbody');
+    sorted.forEach((f,i)=>{
+      const s=score(f); const p=priority(s);
+      const barColor = s>=85?'#A32D2D':s>=75?'#854F0B':s>=65?'#185FA5':'#888780';
+      tbody.innerHTML+=`<tr>
+        <td style="font-size:12px;color:var(--color-text-secondary);font-weight:500">${i+1}</td>
+        <td><div style="font-size:13px;font-weight:500;color:var(--color-text-primary)">${f.title}</div><div style="font-size:11px;color:var(--color-text-secondary);font-family:var(--font-mono)">${f.id}</div></td>
+        <td><span class="badge ${themeClass(f.theme)}" style="font-size:10px">${themeLabel[f.theme]}</span></td>
+        <td><div style="font-size:12px;font-weight:500;margin-bottom:3px">${f.impact}/10</div><div class="score-bar"><div class="score-bar-fill" style="width:${f.impact*10}%;background:${barColor}"></div></div></td>
+        <td><div style="font-size:12px;font-weight:500;margin-bottom:3px">${f.biz}/10</div><div class="score-bar"><div class="score-bar-fill" style="width:${f.biz*10}%;background:${barColor}"></div></div></td>
+        <td><div style="font-size:12px;font-weight:500;margin-bottom:3px">${f.feasibility}/10</div><div class="score-bar"><div class="score-bar-fill" style="width:${f.feasibility*10}%;background:${barColor}"></div></div></td>
+        <td><span style="font-size:16px;font-weight:500;color:${barColor}">${s}</span></td>
+        <td><span class="badge ${p.cls}">${p.label}</span></td>
+      </tr>`;
+    });
+
+    // BACKLOG
+    let currentFilter = 'all';
+    function renderBacklog(filter) {
+      const list = document.getElementById('backlog-list');
+      const items = filter==='all' ? sorted : sorted.filter(f=>f.theme===filter);
+      list.innerHTML = items.map((f,i)=>{
+        const s=score(f); const p=priority(s);
+        return `<div class="story-card" data-theme="${f.theme}">
+          <div class="story-header">
+            <div style="display:flex;align-items:center;gap:8px;flex:1">
+              <div class="rank-num">${sorted.indexOf(f)+1}</div>
+              <div>
+                <div class="story-id">${f.id}</div>
+                <div class="story-title">${f.title}</div>
+              </div>
+            </div>
+            <span class="badge ${p.cls}" style="flex-shrink:0">${p.label}</span>
+          </div>
+          <div class="story-body">${f.story}</div>
+          ${f.note ? `<div class="flag-note">⚑ ${f.note}</div>` : ''}
+          <div class="story-footer">
+            <span class="sp-pill">${f.sp} pts</span>
+            <span class="theme-tag ${themeClass(f.theme)}">${themeLabel[f.theme]}</span>
+            <span class="sp-pill">${f.quarter} 2025</span>
+            ${statusLabel(f.status) ? `<span class="badge ${statusLabel(f.status).cls}">${statusLabel(f.status).label}</span>` : ''}
+            <div class="assignee" style="background:${assigneeColor[f.assignee]};color:${assigneeTextColor[f.assignee]}">${f.assignee}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    renderBacklog('all');
+    function filterBacklog(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('on'));
+      btn.classList.add('on');
+      renderBacklog(filter);
+    }
+
+    // ROADMAP
+    const themes = ['onboarding','analytics','integration','collaboration','security','perf'];
+    const quarters = ['Q1','Q2','Q3','Q4'];
+    const rmBody = document.getElementById('roadmap-grid-body');
+    themes.forEach(theme=>{
+      const row = document.createElement('div');
+      row.className = 'roadmap-row';
+      row.innerHTML = `<div class="rr-theme"><span class="legend-dot" style="background:${getLegendColor(theme)};flex-shrink:0"></span>${themeLabel[theme]}</div>`;
+      quarters.forEach(q=>{
+        const cell = document.createElement('div');
+        cell.className = 'rr-cell';
+        const items = FEATURES.filter(f=>f.theme===theme && f.quarter===q);
+        cell.innerHTML = items.map(f=>`<div class="rm-chip ${rmClass(theme)}"><span class="rc-title">${f.title}</span><span class="rc-pts">${f.sp} pts</span></div>`).join('');
+        row.appendChild(cell);
+      });
+      rmBody.appendChild(row);
+    });
+    function getLegendColor(t){return{onboarding:'#AFA9EC',analytics:'#97C459',integration:'#EF9F27',collaboration:'#85B7EB',security:'#F09595',perf:'#5DCAA5'}[t];}
+
+    // SPRINT KANBAN
+    const sprintFeatures = FEATURES.filter(f=>['F-01','F-02','F-03','F-04','F-05','F-10'].includes(f.id));
+    const cols = [
+      {label:'To do', keys:['todo']},
+      {label:'In progress', keys:['in-progress','blocked','review']},
+      {label:'Done', keys:['done']},
+    ];
+    const kanban = document.getElementById('kanban-board');
+    cols.forEach(col=>{
+      const tickets = sprintFeatures.filter(f=>col.keys.includes(f.status));
+      const div = document.createElement('div');
+      div.className='kanban-col';
+      div.innerHTML=`<div class="kanban-col-title">${col.label}<span class="kanban-count">${tickets.length}</span></div>`
+        + tickets.map(f=>{
+          const sl = statusLabel(f.status);
+          return `<div class="ticket">
+            <div class="ticket-id">${f.id}</div>
+            <div class="ticket-title">${f.title}</div>
+            ${f.note ? `<div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:6px;line-height:1.4">${f.note}</div>` : ''}
+            <div class="ticket-footer">
+              <div style="display:flex;align-items:center;gap:5px">
+                <div class="ticket-sp" title="story points">${f.sp}</div>
+                ${sl ? `<span class="badge ${sl.cls}" style="font-size:10px;padding:1px 6px">${sl.label}</span>` : ''}
+              </div>
+              <div class="assignee" style="background:${assigneeColor[f.assignee]};color:${assigneeTextColor[f.assignee]}">${f.assignee}</div>
+            </div>
+          </div>`;
+        }).join('');
+      kanban.appendChild(div);
+    });
+
+    // STAKEHOLDER RELEASES
+    const releases = [
+      { name:'v1.0 — Foundation', quarter:'Q1 2025', theme:'#EAF3DE', themeText:'#27500A', ids:['F-01','F-02','F-03','F-05','F-14'], rationale:'Shipped. SSO and RBAC were blocking two enterprise deals that have since closed. The analytics dashboard came in a bit narrower than originally scoped (dropped user segments) but that\'s fine — we\'ll pick it up in v1.5. Dark mode was low-effort and bought a lot of goodwill.', status:'Released', statusDot:'#3B6D11' },
+      { name:'v1.5 — Growth Engine', quarter:'Q2 2025', theme:'#FAEEDA', themeText:'#633806', ids:['F-04','F-06','F-08','F-10','F-11'], rationale:'The audit log is the most urgent item here — three contracts are explicitly gated on it and legal is getting impatient. Slack is blocked on app store review which is frustrating but out of our hands. Rate limiting got bumped up from Q3 after last week\'s incident. Report builder is the big swing; we\'ve scoped it conservatively.', status:'In progress', statusDot:'#854F0B' },
+      { name:'v2.0 — Platform Scale', quarter:'Q3 2025', theme:'#EEEDFE', themeText:'#3C3489', ids:['F-07','F-09','F-12','F-13'], rationale:'Honest caveat: co-editing and mobile are both big bets with real technical risk. Co-editing especially — we\'re planning two spike sprints before we commit the full estimate. Multi-tenant is table stakes for the agency channel we want to open in H2. Anomaly detection is the feature most requested in NPS verbatims and the one we\'re most excited about.', status:'Planned', statusDot:'#888780' },
+      { name:'v2.5 — Optimize', quarter:'Q4 2025', theme:'#E6F1FB', themeText:'#0C447C', ids:['F-15','F-16','F-17'], rationale:'Mostly engineering-led this quarter. The integrations marketplace is the one external-facing bet — if we can get 3–4 partners building on it before launch, the flywheel starts. Query optimizer and scheduled reports are smaller quality-of-life items that keep churned users from churning and keep support tickets down.', status:'Planned', statusDot:'#888780' },
+    ];
+    const sr = document.getElementById('stakeholder-releases');
+    releases.forEach(rel=>{
+      const feats = FEATURES.filter(f=>rel.ids.includes(f.id));
+      sr.innerHTML+=`<div class="release-card">
+        <div class="release-head" style="background:${rel.theme}">
+          <div>
+            <div class="release-name" style="color:${rel.themeText}">${rel.name}</div>
+            <div class="release-date" style="color:${rel.themeText};opacity:.8">${rel.quarter}</div>
+          </div>
+          <span class="badge" style="background:${rel.theme};color:${rel.themeText};border:1px solid ${rel.themeText}20;display:flex;align-items:center;gap:5px"><span class="status-dot" style="background:${rel.statusDot}"></span>${rel.status}</span>
+        </div>
+        <div class="release-body">
+          <div class="rationale-block">${rel.rationale}</div>
+          <div class="feature-list">${feats.map(f=>`<div class="feature-pill"><span class="status-dot" style="background:${rel.statusDot}"></span>${f.title}</div>`).join('')}</div>
+        </div>
+      </div>`;
+    });
+
+    // NAV
+    function showPage(id, btn) {
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById('page-'+id).classList.add('active');
+      btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>
